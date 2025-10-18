@@ -1,0 +1,366 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .bg-cream {
+    background-color: #fff6e5;
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .animate-steam {
+    animation: steamUp 2s ease-in-out infinite;
+  }
+
+  .animate-spin-slow {
+    animation: spin 5s linear infinite;
+  }
+
+  .animate-chop {
+    animation: chopEffect 0.25s ease-in-out infinite alternate;
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  @keyframes steamUp {
+    0% {
+      opacity: 0.6;
+      transform: translateY(0) scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: translateY(-10px) scale(1.05);
+    }
+    100% {
+      opacity: 0.6;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes drop-in {
+    0% {
+      transform: translateY(-100px) rotate(-20deg);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0) rotate(0deg);
+      opacity: 1;
+    }
+  }
+  
+  .animate-drop-in {
+    animation: drop-in 0.6s ease-out forwards;
+  }
+  
+}
+
+:root{
+  /* palette tuned for dark walnut */
+  --text-on-wood: #F6E7D3;         /* sand */
+  --muted-on-wood: #E6D3B3;        /* softer sand */
+  --panel-bg: #FFF4E5;             /* chat card */
+  --panel-text: #6B3E1E;           /* cocoa */
+  --accent-amber: #F29B2F;         /* buttons */
+  --accent-amber-dark: #C8791E;
+}
+
+/* Anything placed directly on the walnut background */
+.on-wood, .on-wood > *:not(.chat-bubble){
+  color: var(--text-on-wood);
+}
+
+/* Title on walnut (adds subtle depth) */
+/* --- DishMuse Title: Embossed Café Sign --- */
+/* --- DishMuse Title: Warm Neon Sign --- */
+.dm-title--neon{
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #ffe7b1;
+  text-shadow:
+    0 0 8px rgba(255,196,118,.55),
+    0 0 18px rgba(255,168,87,.45),
+    0 3px 10px rgba(0,0,0,.45);
+  filter: saturate(1.05);
+}
+
+
+/* Caption on walnut */
+/* --- Footer banner line --- */
+.footer-banner{
+  display:inline-flex;
+  align-items:center;
+  gap:.5rem;
+  padding:.5rem .9rem;
+  border-radius:9999px;
+  background: linear-gradient(180deg, rgba(255,248,236,.82), rgba(255,241,216,.82));
+  border:1px solid rgba(242,187,113,.45);
+  color:#6B3E1E;
+  font-size:1rem;
+  box-shadow:
+    0 6px 16px rgba(0,0,0,.18),
+    inset 0 1px 0 rgba(255,255,255,.6);
+  backdrop-filter: blur(3px);
+}
+
+/* small sparkle on hover (subtle) */
+.footer-banner:hover{
+  box-shadow:
+    0 8px 22px rgba(0,0,0,.22),
+    inset 0 1px 0 rgba(255,255,255,.7);
+}
+
+
+/* Chat card stays dark-on-light for readability */
+.chat-bubble{ background: var(--panel-bg); color: var(--panel-text); }
+.chat-bubble *{ color: var(--panel-text); }
+
+/* Inputs inside the chat card */
+.chat-bubble input,
+.chat-bubble textarea{ color: var(--panel-text); }
+.chat-bubble input::placeholder,
+.chat-bubble textarea::placeholder{
+  color: color-mix(in srgb, var(--panel-text) 55%, white);
+}
+
+/* Themed action buttons */
+.dm-btn{
+  background: var(--accent-amber);
+  color: #fff;
+  transition: background .15s ease;
+}
+.dm-btn:hover{ background: var(--accent-amber-dark); }
+
+
+/* --- DishMuse UI polish ----------------------------------------------- */
+
+/* Friendly, readable type */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+html, body, #root { font-family: 'Poppins', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+
+/* Chat card → café-gloss look */
+.chat-bubble{
+  background: linear-gradient(180deg, #fff8ec 0%, #fff3de 100%) !important;
+  border: 1px solid rgba(242, 187, 113, 0.45);
+  box-shadow:
+    0 12px 24px rgba(0,0,0,.16),
+    inset 0 1px 0 rgba(255,255,255,.6);
+  backdrop-filter: blur(2px);
+}
+
+/* Message bubbles */
+.msg-assistant{
+  background: #ffffff;
+  color: #6B3E1E;
+  border: 1px solid rgba(107,62,30,.10);
+  box-shadow: 0 6px 14px rgba(0,0,0,.08);
+  border-bottom-left-radius: .5rem;  /* tail-like corner */
+}
+.msg-user{
+  background: #FFDFA9;
+  color: #5C3B09;
+  border: 1px solid rgba(242,155,47,.35);
+  box-shadow: 0 6px 14px rgba(242,155,47,.18);
+  border-bottom-right-radius: .5rem;
+}
+
+/* Input */
+.dm-input{
+  border: 1.5px solid #f0c36c;
+  border-radius: 9999px;
+  padding: .6rem .9rem;
+  background: #fffefb;
+  color: #5C3B09;
+  box-shadow: inset 0 2px 3px rgba(0,0,0,.04);
+}
+.dm-input::placeholder{ color: color-mix(in srgb, #6B3E1E 50%, white); }
+
+/* Buttons */
+.dm-mic-btn{
+  background: #FFE7C3;
+  color: #9a5a12;
+  border: 1px solid rgba(242,155,47,.35);
+  box-shadow: 0 4px 10px rgba(242,155,47,.18);
+  transition: transform .15s ease, background .2s ease;
+}
+.dm-mic-btn:hover{ transform: translateY(-1px); background:#FFD9A1; }
+
+.dm-send-btn{
+  background-image: linear-gradient(135deg, #F29B2F, #FF8B3D);
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(255,136,61,.35);
+  transition: transform .15s ease, filter .2s ease;
+}
+.dm-send-btn:hover{ transform: translateY(-1px); filter: brightness(1.05); }
+
+/* Tiny typing dots (if you want to swap in later) */
+@keyframes typingDot { 0%,80%,100%{opacity:.2} 40%{opacity:1} }
+.dm-typing span{ animation: typingDot 1.2s infinite; display:inline-block; }
+.dm-typing span:nth-child(2){ animation-delay:.15s }
+.dm-typing span:nth-child(3){ animation-delay:.3s }
+
+/* smoother scrollbar & stop body bounce */
+::-webkit-scrollbar{ height:8px; width:8px }
+::-webkit-scrollbar-thumb{ background: rgba(0,0,0,.18); border-radius: 999px; }
+::-webkit-scrollbar-track{ background: transparent; }
+.on-wood{ overscroll-behavior: none; }
+
+.dm-attach-btn{
+  background:#FFEFE0;
+  color:#8a5a20;
+  border:1px solid rgba(242,155,47,.30);
+  box-shadow:0 4px 10px rgba(242,155,47,.12);
+  transition:transform .15s ease, background .2s ease;
+}
+.dm-attach-btn:hover{ transform:translateY(-1px); background:#FFE1C4; }
+
+/* Footer note “pill” that tucks under the card */
+.footer-banner{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .55rem 1rem;
+  border-radius: 9999px;
+  background: #f8e9d3;
+  color: #8a5a2c;
+  border: 1px solid rgba(170, 120, 60, .18);
+  box-shadow:
+    0 6px 18px rgba(0,0,0,.12),
+    inset 0 1px 0 rgba(255,255,255,.6);
+  font-size: .95rem;
+}
+
+/* Keep the chat input/mic clickable above decor on some browsers */
+.chat-bubble { z-index: 1; }
+
+/* Bottom-center chat tail exactly matching the card */
+.chat-tail-bottom{
+  background: var(--panel-bg);             /* same as the card */
+  border: 1px solid rgba(170,120,60,.10);  /* feather border so it blends */
+  border-radius: 6px;
+  box-shadow: 0 8px 16px rgba(0,0,0,.10);  /* same depth as card */
+}
+
+/* ===== Microwave mockup: right handle + control panel ===== */
+.mw-handle {
+  position: absolute;
+  right: 250px;          /* lines up just left of the panel */
+  top: 60px;
+  bottom: 60px;
+  width: 26px;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #fde8b4 0%, #efc765 100%);
+  box-shadow:
+    inset 0 1px 4px rgba(255, 255, 255, 0.7),
+    0 6px 14px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  z-index: 30;
+}
+
+.mw-panel {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 240px;          /* full mockup width */
+  max-width: 280px;
+  border-top-right-radius: 40px;
+  border-bottom-right-radius: 40px;
+  background: linear-gradient(180deg, #fffaf2 0%, #fde8b4 100%);
+  border-left: 3px solid #e8d4a3;
+  box-shadow:
+    inset 0 10px 18px rgba(255, 255, 255, 0.45),
+    inset 0 -8px 14px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 26px 0 18px;
+  z-index: 20;
+}
+
+.mw-lcd {
+  width: 80%;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #b9e9a7 0%, #9edc8f 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.9),
+    0 1px 1px rgba(0, 0, 0, 0.15);
+}
+
+.mw-keypad {
+  width: 80%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.mw-key {
+  aspect-ratio: 1 / 1;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 35%, #9b6a3a 0%, #7a5230 70%);
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, 0.25),
+    0 3px 5px rgba(0, 0, 0, 0.15);
+}
+
+.mw-vent {
+  width: 80%;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(240, 200, 120, 0.8);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.08);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mw-vent > span {
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(234, 184, 92, 0.9);
+}
+
+.mw-cta {
+  width: 80%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.mw-btn {
+  height: 44px;
+  width: 44px;
+  border-radius: 9999px;
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.25),
+    0 3px 6px rgba(0, 0, 0, 0.18);
+}
+
+.mw-btn--brown {
+  background: radial-gradient(circle at 35% 35%, #9b6a3a 0%, #7a4f28 70%);
+}
+
+.mw-btn--orange {
+  background: radial-gradient(circle at 35% 35%, #ffa24d 0%, #f07a22 70%);
+}
+
+/* Make spacing scale a bit nicer on larger screens */
+@media (min-width: 1024px) {
+  .mw-handle { right: 270px; }
+  .mw-panel { width: 260px; }
+}
