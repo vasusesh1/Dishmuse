@@ -176,7 +176,7 @@ export default function Layout() {
             "
           >
             {/* Chat area */}
-            <div className="relative px-6 pt-6 pb-10 flex flex-col justify-end">
+            <div className="relative px-6 pt-6 pb-10 flex flex-col h-full min-h-0">
               <ChatBot
                 greeting="Welcome to DishMuse! Your recipe assistant. You can type your ingredients or just tap the 📎 paperclip icon to upload a photo of your fridge — I’ll spot what’s inside and suggest recipes!"
                 typingIndicator={true}

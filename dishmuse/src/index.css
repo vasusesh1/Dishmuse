@@ -364,3 +364,41 @@ html, body, #root { font-family: 'Poppins', system-ui, -apple-system, Segoe UI, 
   .mw-handle { right: 270px; }
   .mw-panel { width: 260px; }
 }
+
+
+/* Parchment scroll card */
+.dm-scroll {
+  position: relative;
+  padding: 0.5rem 0.5rem 0.75rem;
+  margin-top: 1rem;
+  border-radius: 18px;
+  background: linear-gradient(#e8d6b3, #e0caa1);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.6),
+    0 8px 18px rgba(0,0,0,.12);
+  border: 1px solid rgba(165, 124, 63, 0.25);
+}
+
+/* curled “top and bottom” rods */
+.dm-scroll::before,
+.dm-scroll::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 14px;
+  border-radius: 999px;
+  background: radial-gradient(ellipse at center, #ccb07f 0%, #b79257 60%, #8b6a36 100%);
+  box-shadow: inset 0 2px 3px rgba(255,255,255,.35), 0 2px 6px rgba(0,0,0,.18);
+}
+.dm-scroll::before { top: -7px; }
+.dm-scroll::after  { bottom: -7px; }
+
+.dm-scroll-inner {
+  background: repeating-linear-gradient(#faecd0 0 28px, #f7e6be 28px 56px);
+  border-radius: 14px;
+  padding: 18px 18px 20px;
+  color: #5b3b1e;
+  border: 1px solid rgba(165, 124, 63, 0.25);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
+}
