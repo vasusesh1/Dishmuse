@@ -21,6 +21,10 @@ export default function ChatBot({
   const [recipeCard, setRecipeCard] = useState(null);
   const [showRecipeScroll, setShowRecipeScroll] = useState(false);
   const [liked, setLiked] = useState(false);
+  
+  // Multiple recipes support
+  const [allRecipes, setAllRecipes] = useState([]);
+  const [currentRecipeIndex, setCurrentRecipeIndex] = useState(0);
 
   // Optional extras slot
   const [moodboardImages, setMoodboardImages] = useState([]);
@@ -105,8 +109,10 @@ export default function ChatBot({
     URL.revokeObjectURL(url);
   };
 
-  const downloadRecipe = () => {
+  const downloadRecipe = async () => {
     if (!recipeCard) return;
+    
+    // Download the recipe file
     const lines = [
       recipeCard.name || "Recipe",
       recipeCard.serves ? `Serves: ${recipeCard.serves}` : "",
@@ -122,6 +128,10 @@ export default function ChatBot({
       `${(recipeCard.name || "Recipe").replace(/\s+/g, "_")}.txt`,
       lines
     );
+
+    // Just show a brief success message - DON'T dismiss the scroll
+    // User might want to navigate to other recipes and download those too
+    pushAssistant(`✅ "${recipeCard.name}" downloaded! ${allRecipes.length > 1 ? 'Feel free to check out the other recipes or click Dismiss when done.' : 'Click Dismiss when you\'re ready to continue.'}`);
   };
 
   // ---------- recipe fetch (scroll only) ----------
@@ -173,6 +183,8 @@ export default function ChatBot({
     // clear transient UI
     setShowRecipeScroll(false);
     setRecipeCard(null);
+    setAllRecipes([]);
+    setCurrentRecipeIndex(0);
     setMoodboardImages([]);
     setLiked(false);
     setStage("chat");
@@ -203,13 +215,30 @@ export default function ChatBot({
       }
 
       // Handle recipe stage - show scroll ONLY, split plating message PROPERLY
-      if (data.stage === "recipe" && data.recipeCard) {
-        let mainReply = "";
-        let platingReply = "";
+      if (data.stage === "recipe" && (data.recipeCards || data.recipeCard)) {
+        // Handle multiple recipes
+        const recipes = data.recipeCards && data.recipeCards.length > 0 
+          ? data.recipeCards 
+          : data.recipeCard ? [data.recipeCard] : [];
         
+        if (recipes.length > 0) {
+          setAllRecipes(recipes);
+          setCurrentRecipeIndex(0);
+          setRecipeCard(recipes[0]);
+          setShowRecipeScroll(true);
+          setStage("recipe");
+        }
+        
+        // Handle reply text - filter out "Saved as favorite" and split plating
         if (data.reply) {
+          let mainReply = data.reply;
+          let platingReply = "";
+          
+          // Remove "Saved as favorite" message if present
+          mainReply = mainReply.replace(/Saved as a favorite\.?\s*Happy cooking!?\s*[💛🍽️✨]*/gi, '').trim();
+          
           // Split on plating-related phrases
-          const split = data.reply.split(/(Want to serve it café-style|Would you like.*?plating|café-style or thali-style)/i);
+          const split = mainReply.split(/(Want to serve it café-style|Would you like.*?plating|café-style or thali-style)/i);
           
           mainReply = split[0].trim();
           
@@ -221,24 +250,17 @@ export default function ChatBot({
           // Show main reply if it doesn't contain recipe content
           if (mainReply && 
               !mainReply.includes("**Ingredients:**") && 
-              !mainReply.includes("**Steps:**") &&
-              !mainReply.includes("**FUSION PAV") &&
-              !mainReply.includes("**CREAMY AAMRAS")) {
+              !mainReply.includes("**Steps:**")) {
             pushAssistant(mainReply);
             speak(mainReply);
           }
-        }
-        
-        // Show recipe scroll
-        setRecipeCard(data.recipeCard);
-        setShowRecipeScroll(true);
-        setStage("recipe");
-        
-        // Show plating message as separate bubble after delay
-        if (platingReply) {
-          setTimeout(() => {
-            pushAssistant(platingReply);
-          }, 800);
+          
+          // Show plating message as separate bubble after delay
+          if (platingReply) {
+            setTimeout(() => {
+              pushAssistant(platingReply);
+            }, 800);
+          }
         }
       } else if (data.reply) {
         // For non-recipe stages, show full conversational reply
@@ -384,9 +406,76 @@ export default function ChatBot({
   };
 
   // ---------- recipe actions ----------
-  const likeRecipe = () => {
+  const likeRecipe = async () => {
+    // Just update UI state - no message!
     setLiked(true);
-    pushAssistant("Saved as a favorite. Happy cooking! 💛");
+
+    // Silently notify backend
+    try {
+      await fetch("http://localhost:5000/api/dishmuse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          action: "like",
+        }),
+      });
+    } catch (error) {
+      console.error("Error:", error);
+    }
+  };
+
+  const dismissRecipe = async () => {
+    // Dismiss the recipe card
+    setShowRecipeScroll(false);
+    setRecipeCard(null);
+    setAllRecipes([]);
+    setCurrentRecipeIndex(0);
+    setLiked(false);
+
+    // Ask about plating/decor ideas after dismissing
+    if (typingIndicator) setIsTyping(true);
+    
+    try {
+      const res = await fetch("http://localhost:5000/api/dishmuse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          action: "download", // Reuse the download action to get plating prompt
+        }),
+      });
+
+      const data = await res.json();
+      setIsTyping(false);
+      
+      if (data.reply && data.reply.trim()) {
+        pushAssistant(data.reply);
+        speak(data.reply);
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      setIsTyping(false);
+    }
+  };
+
+  // Navigate between multiple recipes
+  const handleNextRecipe = () => {
+    if (currentRecipeIndex < allRecipes.length - 1) {
+      const nextIndex = currentRecipeIndex + 1;
+      setCurrentRecipeIndex(nextIndex);
+      setRecipeCard(allRecipes[nextIndex]);
+      setLiked(false);
+    }
+  };
+
+  const handlePrevRecipe = () => {
+    if (currentRecipeIndex > 0) {
+      const prevIndex = currentRecipeIndex - 1;
+      setCurrentRecipeIndex(prevIndex);
+      setRecipeCard(allRecipes[prevIndex]);
+      setLiked(false);
+    }
   };
 
   // ---------- UI ----------
@@ -449,6 +538,13 @@ export default function ChatBot({
         {showRecipeScroll && recipeCard && (
           <div className="dm-scroll">
             <div className="dm-scroll-inner">
+              {/* Recipe counter - show if multiple recipes */}
+              {allRecipes.length > 1 && (
+                <div className="recipe-counter">
+                  Recipe {currentRecipeIndex + 1} of {allRecipes.length}
+                </div>
+              )}
+
               <h2 className="text-xl font-extrabold mb-2" style={{ color: '#5b3b1e' }}>
                 {recipeCard.name}
               </h2>
@@ -475,6 +571,27 @@ export default function ChatBot({
               </ol>
             </div>
 
+            {/* Navigation buttons - only if multiple recipes */}
+            {allRecipes.length > 1 && (
+              <div className="recipe-navigation">
+                <button
+                  onClick={handlePrevRecipe}
+                  disabled={currentRecipeIndex === 0}
+                  className="nav-btn prev-btn"
+                >
+                  ← Previous
+                </button>
+                <button
+                  onClick={handleNextRecipe}
+                  disabled={currentRecipeIndex === allRecipes.length - 1}
+                  className="nav-btn next-btn"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+
+            {/* Action buttons */}
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 onClick={downloadRecipe}
@@ -489,6 +606,12 @@ export default function ChatBot({
                 }`}
               >
                 {liked ? "★ Liked" : "☆ Like"}
+              </button>
+              <button
+                onClick={dismissRecipe}
+                className="px-4 py-2 rounded-full bg-gray-300 hover:bg-gray-400 text-gray-800 text-sm font-medium"
+              >
+                ✕ Dismiss
               </button>
             </div>
           </div>
@@ -525,6 +648,9 @@ export default function ChatBot({
               if (showRecipeScroll) {
                 setShowRecipeScroll(false);
                 setRecipeCard(null);
+                setAllRecipes([]);
+                setCurrentRecipeIndex(0);
+                setLiked(false);
               }
               if (moodboardImages.length) setMoodboardImages([]);
             }}

@@ -26,6 +26,8 @@ const model = new ChatAnthropic({
 
 const ingredientState = new Map();
 const messageHistories = new Map();
+const recipeDownloaded = new Map(); // Track if recipe was downloaded
+const recipeLiked = new Map(); // Track if recipe was liked
 
 const prompt = ChatPromptTemplate.fromPromptMessages([
     SystemMessagePromptTemplate.fromTemplate(`You are DishMuse — a warm, witty, visually inspired AI recipe companion that helps users turn leftover ingredients into delightful dishes — and meals into experiences.
@@ -33,7 +35,7 @@ const prompt = ChatPromptTemplate.fromPromptMessages([
 Personality: Warm, clever, emotionally intelligent, gently humorous (never sarcastic), creative and visually thoughtful — you think like a chef and a designer. Always encouraging, safe, and family-friendly.
 
 Core Function:
-Generate 1–2 creative and detailed recipe ideas based on what the user has or craves.
+Generate 1–2 creative and detailed recipe ideas based on what the user has or craves. 
 
 CRITICAL: Ask these follow-up questions if details are missing:
 - "What kind of cuisine do you prefer?"
@@ -72,10 +74,21 @@ If a user jokes or asks for "non-food recipes" (like "recipe for happiness"), re
 "Recipe for happiness? One cup gratitude, two spoons laughter — stir often. 💛"
 Stay warm, never mocking or dark. Guide gently back to real cooking with a smile.
 
+Recipe Selection Flow:
+**CRITICAL: Before providing shopping list or full recipes:**
+1. Suggest 2-3 recipe IDEAS (just names and brief descriptions)
+2. Ask: "Which direction sounds more appealing to you?"
+3. Wait for user to choose their preferred recipe
+4. THEN calculate ingredient quantities needed for that specific recipe
+5. Compare with what user has available
+6. If ingredients are sufficient → skip shopping list, proceed to full recipe
+7. If ingredients are missing → provide shopping list with tweaked quantities for the chosen recipe only
+
 Grocery / Missing Ingredient Stage:
 **CRITICAL: NEVER mention Instacart, Walmart, or ANY online delivery services. ALWAYS provide shopping lists for IN-STORE shopping ONLY.**
 
-If ingredients are missing, compute what's needed with exact quantities and units.
+Only provide shopping list if ingredients are insufficient for the chosen recipe.
+Compute what's needed with exact quantities and units, adjusted for the specific recipe chosen.
 Format shopping lists as plain text with dashes (no markdown, headers, or bold):
 - Salt - 1 box
 - Garlic - 2 bulbs
@@ -88,6 +101,8 @@ After showing list, ask: "Ready to head to the store? Once you're back, I'll wal
 Recipe Stage:
 Before providing FULL recipes, always ask: "OK! Shall I go ahead and suggest the full recipes now?"
 Only proceed after user confirms.
+
+**CRITICAL: When user requests MULTIPLE dishes (e.g., "one main dish and aamras"), you MUST provide SEPARATE, COMPLETE recipes for EACH dish requested.**
 
 Format recipes EXACTLY like this:
 **Recipe Name**
@@ -103,7 +118,9 @@ Format recipes EXACTLY like this:
 
 End with: "Enjoy your meal! 🍽️"
 
-Multiple Recipes: If suggesting multiple dishes, format EACH one with the same structure above.
+Multiple Recipes: If suggesting multiple dishes, format EACH one with the same structure above. Never combine multiple dishes into one recipe.
+
+**CRITICAL - DO NOT include "Saved as a favorite. Happy cooking!" or similar messages in your responses. The frontend handles user actions like liking/downloading recipes.**
 
 Plating & Presentation:
 AFTER recipe is complete, in a SEPARATE message:
@@ -127,10 +144,13 @@ Stay warm, redirect harmful requests gently but firmly.
 Operating Flow:
 1. Collect: Ask essential follow-ups (ALWAYS ask about allergies/restrictions first)
 2. Check quantities: Calculate if ingredients are sufficient for servings
-3. Confirm: Get user confirmation before full recipes ("Shall I go ahead and suggest full recipes now?")
-4. Grocery stage (if needed): Plain shopping list for in-store
-5. Recipe stage: Detailed, well-formatted recipes
-6. Closure: Offer plating ideas in separate message
+3. Suggest 2-3 recipe IDEAS and ask user to choose
+4. Wait for user's choice
+5. Calculate exact ingredient needs for chosen recipe
+6. Grocery stage (if needed): Plain shopping list with tweaked quantities for chosen recipe only
+7. Confirm: Get user confirmation before full recipes ("Shall I go ahead and suggest full recipes now?")
+8. Recipe stage: Detailed, well-formatted recipes (provide ALL recipes if user requested multiple dishes)
+9. Closure: Offer plating ideas in separate message
 
 Always:
 - Be concise, friendly, smart
@@ -141,6 +161,10 @@ Always:
 - Never hallucinate ingredients
 - Ask if they want sides/desserts/drinks
 - Offer presentation/plating ideas when relevant
+- Let user choose recipe BEFORE providing shopping list
+- Tweak ingredient quantities based on chosen recipe
+- When user requests multiple dishes, provide separate complete recipes for each
+- NEVER include messages like "Saved as a favorite" - frontend handles this
 
 If User Says "Just give me a quick recipe":
 Skip extra follow-ups and give one simple, tasty recipe with gentle humor. But still check for allergies first.
@@ -215,6 +239,43 @@ app.post("/api/dishmuse", async (req, res) => {
       sessionId = `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
     }
 
+    // Handle special actions from frontend
+    const isDownloadAction = req.body.action === "download";
+    const isLikeAction = req.body.action === "like";
+
+    // If download action, auto-prompt for plating
+    if (isDownloadAction) {
+      recipeDownloaded.set(sessionId, true);
+      const platingPrompt = "Great! Would you like plating ideas or decor suggestions to make your dish presentation special?";
+      
+      res.json({
+        stage: "chat",
+        reply: platingPrompt,
+        recipeCard: null,
+        recipeCards: [],
+        groceryList: [],
+        haveIngredients: ingredientState.get(sessionId)?.have || [],
+        missingIngredients: ingredientState.get(sessionId)?.missing || [],
+        dismissRecipe: true, // Signal frontend to dismiss recipe card
+      });
+      return;
+    }
+
+    // If like action, just acknowledge silently (no "Saved as favorite" message)
+    if (isLikeAction) {
+      recipeLiked.set(sessionId, true);
+      res.json({
+        stage: "chat",
+        reply: "", // Empty reply = no message bubble
+        recipeCard: null,
+        recipeCards: [],
+        groceryList: [],
+        haveIngredients: ingredientState.get(sessionId)?.have || [],
+        missingIngredients: ingredientState.get(sessionId)?.missing || [],
+      });
+      return;
+    }
+
     const state = updateIngredientState(sessionId, userInput);
     const summary = `\n\n🧾 So far, you have: ${state.have.join(", ") || "nothing confirmed yet"}.\n❌ Missing: ${state.missing.join(", ") || "none detected"}.`;
 
@@ -223,7 +284,10 @@ app.post("/api/dishmuse", async (req, res) => {
       { configurable: { sessionId } }
     );
 
-    const fullReply = response.content;
+    let fullReply = response.content;
+
+    // Remove any "Saved as a favorite" messages from Claude's response
+    fullReply = fullReply.replace(/Saved as a favorite\.?\s*Happy cooking!?\s*[💛🍽️✨]*/gi, '').trim();
 
     // Determine stage
     let stage = "chat";
@@ -244,33 +308,33 @@ app.post("/api/dishmuse", async (req, res) => {
       }
     }
 
-    // Extract ALL recipes using improved regex
-    // Extract ALL recipes - works for ANY recipe name
-const recipeRegex = /\*\*([^*\n]{3,})\*\*\s*\*\*Serves:\*\*\s*([^\n]+)\s*\*\*Ingredients:\*\*\s*([\s\S]*?)\*\*Steps:\*\*\s*([\s\S]*?)(?=\n\*\*[A-Z]|\*\*Plating|Enjoy your|Would you like|$)/gi;
+    // IMPROVED: Extract ALL recipes - now handles multiple distinct recipes better
+    // This regex captures recipes that are separated by other recipe headers
+    const recipeRegex = /\*\*([^*\n]{3,}?)\*\*\s*\*\*Serves:\*\*\s*([^\n]+)\s*\*\*Ingredients:\*\*\s*([\s\S]*?)\*\*Steps:\*\*\s*([\s\S]*?)(?=\n\s*\*\*(?:[A-Z][^*]*?)\*\*\s*\*\*Serves:|\*\*Plating|Enjoy your|Would you like|Ready to|Great!|$)/gi;
 
-let match;
-while ((match = recipeRegex.exec(fullReply)) !== null) {
-  const [, name, serves, rawIngredients, rawSteps] = match;
-  
-  const ingredients = rawIngredients
-    .split(/\n/)
-    .map(s => s.replace(/^[-•\d\.\s🥔🥕🫑🥬🍅🧅]+/, '').trim())
-    .filter(Boolean);
-  
-  const steps = rawSteps
-    .split(/\n/)
-    .map(s => s.replace(/^\d+\.\s*/, '').trim())
-    .filter(Boolean);
+    let match;
+    while ((match = recipeRegex.exec(fullReply)) !== null) {
+      const [, name, serves, rawIngredients, rawSteps] = match;
+      
+      const ingredients = rawIngredients
+        .split(/\n/)
+        .map(s => s.replace(/^[-•\d\.\s🥔🥕🫑🥬🍅🧅]+/, '').trim())
+        .filter(line => line && !line.startsWith('**') && line.length > 2);
+      
+      const steps = rawSteps
+        .split(/\n/)
+        .map(s => s.replace(/^\d+\.\s*/, '').trim())
+        .filter(line => line && !line.startsWith('**') && line.length > 5);
 
-  if (ingredients.length > 0 && steps.length > 0) {
-    recipeCards.push({
-      name: name.trim(),
-      serves: serves.trim(),
-      ingredients,
-      steps,
-    });
-  }
-}
+      if (ingredients.length > 0 && steps.length > 0) {
+        recipeCards.push({
+          name: name.trim(),
+          serves: serves.trim(),
+          ingredients,
+          steps,
+        });
+      }
+    }
 
     if (recipeCards.length > 0) {
       stage = "recipe";
@@ -291,8 +355,8 @@ while ((match = recipeRegex.exec(fullReply)) !== null) {
     res.json({
       stage,
       reply: cleanReply,
-      recipeCard: recipeCards.length > 0 ? recipeCards[0] : null, // Send first recipe
-      recipeCards: recipeCards, // Send all recipes
+      recipeCard: recipeCards.length > 0 ? recipeCards[0] : null, // Send first recipe for backward compatibility
+      recipeCards: recipeCards, // Send ALL recipes
       groceryList,
       haveIngredients: state.have,
       missingIngredients: state.missing,
