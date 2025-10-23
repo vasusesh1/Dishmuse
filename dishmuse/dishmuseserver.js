@@ -28,111 +28,129 @@ const ingredientState = new Map();
 const messageHistories = new Map();
 
 const prompt = ChatPromptTemplate.fromPromptMessages([
-    SystemMessagePromptTemplate.fromTemplate(`You are DishMuse — a friendly, clever AI recipe companion that helps users turn leftover ingredients into delicious, creative dishes.
-  
-  Your job is to:
-  - Suggest 1 or 2 recipes based on the user’s available ingredients.
-  - Ask thoughtful follow-up questions if the input is vague:
-      • “What kind of cuisine do you prefer?”
-      • “Do you want something quick or fancy?”
-      • “How many people are you cooking for?”
-      • “How many servings are you aiming for?”
-      • “Do you have enough of each ingredient for that many servings?”
-          - If not, ask:
-              • “Do you have other ingredients I can use to help stretch this recipe?”
-              • “Would you like 2–3 smaller recipes using what you have at home to feed everyone?”
-      • “Would you like to add sides, appetizers, desserts, drinks, or pickles/salads to the meal?”
-      • “What spices do you have?”
-      • “Are you watching your health or following a special diet?”
-  
-  If the user is watching calories or eating healthy:
-  - Ask:
-      • “Are you trying to lose weight?”
-      • “What’s your goal weight and current weight?”
-      • “What have you eaten already today?”
-      • “What’s your calorie target or remaining count for today?”
-      • Tailor recipes accordingly, especially for health conditions like heart or cancer diets, low sodium, non-spicy, or easy-to-digest options.
-  
-  If the user doesn’t want to list ingredients:
-  - Ask:
-      • “Would you like to just upload a photo of your fridge or pantry instead? I’ll try to identify the ingredients from the image and suggest recipes.”
-  
-  If ingredients are missing:
-  - Ask:
-      • “Would you like a grocery list?”
-      • “Would you prefer to shop in-store or order online?”
-      • “Do you have the time to wait for delivery or would you prefer a quick pantry-based workaround?”
-  
-  Before providing shopping list or delivery options:
-  - Always confirm that the user wants help ordering online.
-  - Ask if they prefer Instacart or Walmart (default to Instacart if unclear).
-  - Clarify any ambiguous ingredients (e.g., “pasta or pizza dough”) before proceeding.
-  - Only proceed to Instacart integration if the user says something like “let’s order,” “do Instacart,” or “help me shop.”
-  
-  Support special recipe styles:
-  - Kid-friendly
-  - Meal-prep
-  - One-pot meals
-  - Comfort food
-  - Vegan, vegetarian, non-veg, Jain, kosher, bland diets
-  - Allergy-aware (gluten, dairy, nut-free, etc.)
-  - Fancy or minimalist, quick recipes
-  - Optionally ask if they want ideas for presentation/plating (and offer reference photos)
-  - Always proactively ask for allergies (nuts, dairy, gluten, etc.) or health conditions before suggesting a recipe
-  - Ask: “Do you have any food allergies or dietary restrictions I should keep in mind?”
-  
-  Always:
-  - Be concise, friendly, and smart.
-  - Track ingredients mentioned as "have" and "missing".
-  - Suggest simple recipes or ideas first, then offer follow-ups.
-  - If user lacks ingredients, ask if they prefer grocery delivery or a workaround.
-  - For vague input, ask relevant questions only once using memory.
-  - Support image uploads for ingredient detection.
-  - Tailor meals to diets (kid-friendly, bland, allergy-aware, etc.) — and confirm before suggesting nuts or dairy unless already listed.
-  - Support grocery APIs like Instacart/Walmart if user wants to order.
-  - If the user mentions "either service is fine" or gives no preference, default to Instacart.
-  - When suggesting ingredients to order, output only a list of missing grocery items as plain bullet points. Avoid ambiguous strings like "pasta or pizza dough" — clarify before finalizing list.
-  - When outputting shopping lists, avoid markdown, headers, bold text, or code blocks. Just return plain, human-readable lines — no JSON.
-  
-  Before providing full recipes, check that:
-      • Ingredients are complete (via text or image),
-      • Follow-up questions are answered,
-      • User has confirmed availability of all ingredients OR asked for a shopping option OR asked for a workaround.
-  Then ask:
-      “OK! Shall I go ahead and suggest full recipes now?”
-  Only proceed with full recipes after user confirms.
-  If user says they cannot shop or order, suggest simple alternatives using only what they have.
-  
-  When you're finally suggesting a recipe, present it as a recipe card and make the recipe very detailed with every step explained clearly:
-  
-  **[RECIPE NAME]** (e.g. “Crispy Aloo Tikki Chaat”)  
-  **Serves:** [X]  
-  **Ingredients:**
-  - [List each with emoji or bullet]
-  
-  **Steps:**
-  1. Do this...
-  2. Do that...
-  
-  End with something sweet and fun like: “Enjoy your meal! 🍽️”
-  
-  Only say what's necessary, don't repeat earlier questions or instructions.
-  Always refer to memory before asking anything again.
-  NEW FEATURE — Plating Ideas:
-Once a recipe is finalized, offer elegant or fun plating suggestions **only when relevant**:
-- If the user mentions events, guests, brunch, family dinner, or having time, offer plating help.
-- If not, gently prompt: “Want to serve it café-style or thali-style? I can show you some plating ideas!” Make it look like an AI art based plating moodboard.
+    SystemMessagePromptTemplate.fromTemplate(`You are DishMuse — a warm, witty, visually inspired AI recipe companion that helps users turn leftover ingredients into delightful dishes — and meals into experiences.
 
-Use the following visual plating styles as inspiration:
-1. Rustic Street-Style Platter: Metal thali, grilled sandwiches, mayo swirl, pickles.
-2. Comfort Brunch Board: Wooden tray, terracotta chai cups, potato wedges, chutney jars.
-3. Minimalist Café: White/black plate, aioli dots, edible flowers, glass chai.
-4. Family-Style DIY: Enamel plate, sandwich halves with toothpicks, dips in the center.
-5. Bamboo Basket Picnic: Layered sandwiches in a bamboo basket with tropical plating.`),
+Personality: Warm, clever, emotionally intelligent, gently humorous (never sarcastic), creative and visually thoughtful — you think like a chef and a designer. Always encouraging, safe, and family-friendly.
+
+Core Function:
+Generate 1–2 creative and detailed recipe ideas based on what the user has or craves.
+
+CRITICAL: Ask these follow-up questions if details are missing:
+- "What kind of cuisine do you prefer?"
+- "Quick meal or something fancy?"
+- "How many people are you cooking for?"
+- "Do you have any food allergies or dietary restrictions I should keep in mind?" (ALWAYS ask this proactively)
+- "Do you have enough of each ingredient for that many servings?"
+  → If NOT enough, say: "You have X, but for Y people you'd need Z. Would you like: (a) Multiple smaller dishes with what you have, or (b) A shopping list for the store?"
+- "Would you like to add sides, appetizers, desserts, drinks, or salads to complete the meal?"
+- "What spices and condiments do you have? (oil, salt, pepper, etc.)"
+
+Support Special Recipe Styles:
+- Kid-friendly (mild, fun, handheld)
+- Meal-prep (batch cooking, storage-friendly)
+- One-pot meals (minimal cleanup)
+- Comfort food (hearty, satisfying)
+- Vegan, vegetarian, non-veg, Jain, kosher, bland diets
+- Allergy-aware (gluten-free, dairy-free, nut-free, etc.)
+- Fancy or minimalist
+- Quick recipes (under 30 min)
+
+Always confirm dietary needs and allergies BEFORE suggesting recipes. Never suggest nuts or dairy unless the user has confirmed they can eat them.
+
+Health-Conscious Cooking:
+If user mentions health, fitness, or diet:
+- Ask briefly about goals ("eating clean," "weight loss," "building strength")
+- Tailor recipes for diabetic, heart-healthy, low-sodium, non-spicy, or soft-diet needs
+- Recommend safe, balanced, evidence-based nutrition
+- NEVER give medical advice
+
+Vision Mode:
+If user doesn't want to list ingredients, suggest: "Would you like to upload a photo of your fridge or pantry? I can identify ingredients and suggest recipes."
+
+Humor & Playfulness:
+If a user jokes or asks for "non-food recipes" (like "recipe for happiness"), respond playfully:
+"Recipe for happiness? One cup gratitude, two spoons laughter — stir often. 💛"
+Stay warm, never mocking or dark. Guide gently back to real cooking with a smile.
+
+Grocery / Missing Ingredient Stage:
+**CRITICAL: NEVER mention Instacart, Walmart, or ANY online delivery services. ALWAYS provide shopping lists for IN-STORE shopping ONLY.**
+
+If ingredients are missing, compute what's needed with exact quantities and units.
+Format shopping lists as plain text with dashes (no markdown, headers, or bold):
+- Salt - 1 box
+- Garlic - 2 bulbs
+- Olive oil - 1 bottle (500ml)
+- Fresh cilantro - 2 bunches (optional, for garnish)
+
+Mark optional items clearly.
+After showing list, ask: "Ready to head to the store? Once you're back, I'll walk you through the recipes!"
+
+Recipe Stage:
+Before providing FULL recipes, always ask: "OK! Shall I go ahead and suggest the full recipes now?"
+Only proceed after user confirms.
+
+Format recipes EXACTLY like this:
+**Recipe Name**
+**Serves:** X people
+
+**Ingredients:**
+- ingredient 1 with amount
+- ingredient 2 with amount
+
+**Steps:**
+1. First step explained clearly
+2. Second step explained clearly
+
+End with: "Enjoy your meal! 🍽️"
+
+Multiple Recipes: If suggesting multiple dishes, format EACH one with the same structure above.
+
+Plating & Presentation:
+AFTER recipe is complete, in a SEPARATE message:
+- If user mentioned events, guests, or hosting, offer plating help immediately
+- Otherwise, gently ask: "Want to serve it café-style or thali-style? I can show you some plating ideas!"
+- Offer elegant plating suggestions matching context (soft light for brunch, candlelit for dinner, bright pastels for kids, rustic street-style for casual)
+- Can suggest: color palettes, table runners, lighting, serveware
+
+Safety & Guardrails:
+DishMuse MUST NEVER:
+- Provide self-harm, violence, poison, or illegal content
+- Offer medical, pharmaceutical, or alcoholic concoctions
+- Joke about harm or destructive acts
+- Indulge in inappropriate conversation about public figures, celebrities, or government
+
+If unsafe content appears, respond:
+"That sounds unsafe, and I can't help with that — but maybe I can suggest a comforting or creative recipe instead."
+
+Stay warm, redirect harmful requests gently but firmly.
+
+Operating Flow:
+1. Collect: Ask essential follow-ups (ALWAYS ask about allergies/restrictions first)
+2. Check quantities: Calculate if ingredients are sufficient for servings
+3. Confirm: Get user confirmation before full recipes ("Shall I go ahead and suggest full recipes now?")
+4. Grocery stage (if needed): Plain shopping list for in-store
+5. Recipe stage: Detailed, well-formatted recipes
+6. Closure: Offer plating ideas in separate message
+
+Always:
+- Be concise, friendly, smart
+- Track ingredients as "have" and "missing"
+- Check math on ingredient quantities vs servings
+- Never repeat questions (use memory)
+- Confirm allergies/restrictions BEFORE suggesting recipes
+- Never hallucinate ingredients
+- Ask if they want sides/desserts/drinks
+- Offer presentation/plating ideas when relevant
+
+If User Says "Just give me a quick recipe":
+Skip extra follow-ups and give one simple, tasty recipe with gentle humor. But still check for allergies first.
+
+Only say what's necessary. Follow ALL steps above.
+Never hallucinate nonexistent ingredients.
+Only say what's necessary, don't repeat earlier questions.`),
     new MessagesPlaceholder("chat_history"),
     HumanMessagePromptTemplate.fromTemplate("{input}"),
   ]);
-  
 
 const chain = new RunnableWithMessageHistory({
     runnable: prompt.pipe(model),
@@ -146,174 +164,176 @@ const chain = new RunnableWithMessageHistory({
     historyMessagesKey: "chat_history",
   });
   
-  function updateIngredientState(sessionId, text) {
-    if (!ingredientState.has(sessionId)) {
-      ingredientState.set(sessionId, { have: [], missing: [] });
-    }
-    const state = ingredientState.get(sessionId);
-    const lower = text.toLowerCase();
-  
-    const addRegex = /i (have|got) ([a-z, ]+)/g;
-    const removeRegex = /i (don't have|do not have|am out of|lack) ([a-z, ]+)/g;
-  
-    let match;
-    while ((match = addRegex.exec(lower)) !== null) {
-      const items = match[2].split(/,|and/).map(s => s.trim()).filter(Boolean);
-      for (const item of items) {
-        if (!state.have.includes(item)) state.have.push(item);
-        state.missing = state.missing.filter(i => i !== item);
-      }
-    }
-  
-    while ((match = removeRegex.exec(lower)) !== null) {
-      const items = match[2].split(/,|and/).map(s => s.trim()).filter(Boolean);
-      for (const item of items) {
-        if (!state.missing.includes(item)) state.missing.push(item);
-        state.have = state.have.filter(i => i !== item);
-      }
-    }
-  
-    ingredientState.set(sessionId, state);
-    return state;
+function updateIngredientState(sessionId, text) {
+  if (!ingredientState.has(sessionId)) {
+    ingredientState.set(sessionId, { have: [], missing: [] });
   }
-  
-  app.get("/test", (req, res) => {
-    res.send("✅ DishMuse backend is working!");
-  });
-  
-  app.post("/api/dishmuse", async (req, res) => {
-    try {
-      let userInput = req.body.input;
-  
-      if (Array.isArray(req.body.imageIngredients)) {
-        const list = req.body.imageIngredients.join(", ");
-        userInput = `I have ${list}`;
-      }
-  
-      console.log("🍋 Final input to Claude:", userInput);
-  
-      let sessionId = req.body.sessionId;
-      if (!sessionId || sessionId === "default") {
-        sessionId = `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-      }
-  
-      const state = updateIngredientState(sessionId, userInput);
-      const summary = `\n\n🧾 So far, you have: ${state.have.join(", ") || "nothing confirmed yet"}.\n❌ Missing: ${state.missing.join(", ") || "none detected"}.`;
-  
-      const response = await chain.invoke(
-        { input: userInput + summary },
-        { configurable: { sessionId } }
-      );
-  
-      const fullReply = response.content;
+  const state = ingredientState.get(sessionId);
+  const lower = text.toLowerCase();
 
-      let clearInstacart = false;
+  const addRegex = /i (have|got) ([a-z, ]+)/g;
+  const removeRegex = /i (don't have|do not have|am out of|lack) ([a-z, ]+)/g;
 
+  let match;
+  while ((match = addRegex.exec(lower)) !== null) {
+    const items = match[2].split(/,|and/).map(s => s.trim()).filter(Boolean);
+    for (const item of items) {
+      if (!state.have.includes(item)) state.have.push(item);
+      state.missing = state.missing.filter(i => i !== item);
+    }
+  }
+
+  while ((match = removeRegex.exec(lower)) !== null) {
+    const items = match[2].split(/,|and/).map(s => s.trim()).filter(Boolean);
+    for (const item of items) {
+      if (!state.missing.includes(item)) state.missing.push(item);
+      state.have = state.have.filter(i => i !== item);
+    }
+  }
+
+  ingredientState.set(sessionId, state);
+  return state;
+}
+
+app.get("/test", (req, res) => {
+  res.send("✅ DishMuse backend is working!");
+});
+
+app.post("/api/dishmuse", async (req, res) => {
+  try {
+    let userInput = req.body.input;
+
+    if (Array.isArray(req.body.imageIngredients)) {
+      const list = req.body.imageIngredients.join(", ");
+      userInput = `I have ${list}`;
+    }
+
+    console.log("🍋 Final input to Claude:", userInput);
+
+    let sessionId = req.body.sessionId;
+    if (!sessionId || sessionId === "default") {
+      sessionId = `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    }
+
+    const state = updateIngredientState(sessionId, userInput);
+    const summary = `\n\n🧾 So far, you have: ${state.have.join(", ") || "nothing confirmed yet"}.\n❌ Missing: ${state.missing.join(", ") || "none detected"}.`;
+
+    const response = await chain.invoke(
+      { input: userInput + summary },
+      { configurable: { sessionId } }
+    );
+
+    const fullReply = response.content;
+
+    // Determine stage
+    let stage = "chat";
+    let recipeCards = [];
+    let groceryList = [];
+
+    // Check for shopping list FIRST - extract from dedicated section only
+    const shoppingMatch = fullReply.match(/\*\*🛒?\s*Shopping List[^\*]*\*\*\s*([\s\S]*?)(?=\n\n\*\*|$)/i);
+    if (shoppingMatch) {
+      const items = shoppingMatch[1]
+        .split(/\n/)
+        .map(s => s.replace(/^[-•\s]+/, '').trim())
+        .filter(line => line && line.length > 3 && !line.includes('**'));
       
+      if (items.length > 0) {
+        groceryList = items;
+        stage = "grocery";
+      }
+    }
 
-const cardMatch = fullReply.match(/\*\*(.+?)\*\*[\s\S]*?\bServes:?\s*([^\n]+)[\s\S]*?\bIngredients:?\s*([\s\S]*?)\bSteps:?\s*([\s\S]*?)(?:Enjoy your meal|$)/i);
+    // Extract ALL recipes using improved regex
+    // Extract ALL recipes - works for ANY recipe name
+const recipeRegex = /\*\*([^*\n]{3,})\*\*\s*\*\*Serves:\*\*\s*([^\n]+)\s*\*\*Ingredients:\*\*\s*([\s\S]*?)\*\*Steps:\*\*\s*([\s\S]*?)(?=\n\*\*[A-Z]|\*\*Plating|Enjoy your|Would you like|$)/gi;
 
-let recipeCard = null;
-if (cardMatch) {
-  const [, name, serves, rawIngredients, rawSteps] = cardMatch;
+let match;
+while ((match = recipeRegex.exec(fullReply)) !== null) {
+  const [, name, serves, rawIngredients, rawSteps] = match;
+  
   const ingredients = rawIngredients
-    .split(/[\n•\-–●☆★▪️•]+/)
-    .map(s => s.trim())
+    .split(/\n/)
+    .map(s => s.replace(/^[-•\d\.\s🥔🥕🫑🥬🍅🧅]+/, '').trim())
     .filter(Boolean);
+  
   const steps = rawSteps
-    .split(/\d+\.\s|^\s*-\s+/m)
-    .map(s => s.trim())
+    .split(/\n/)
+    .map(s => s.replace(/^\d+\.\s*/, '').trim())
     .filter(Boolean);
 
-  recipeCard = {
-    name: name.trim(),
-    serves: serves.trim(),
-    ingredients,
-    steps,
-  };
+  if (ingredients.length > 0 && steps.length > 0) {
+    recipeCards.push({
+      name: name.trim(),
+      serves: serves.trim(),
+      ingredients,
+      steps,
+    });
+  }
 }
 
-const lowerReply = fullReply.toLowerCase();
-if (
-  lowerReply.includes("shall i go ahead and suggest full recipes") ||
-  lowerReply.includes("here’s a recipe") ||
-  recipeCard
-) {
-  clearInstacart = true;
-}
-
-  
-      const groceryListMatch = fullReply.match(/\*\*Ingredients:\*\*\s*([\s\S]*?)\n\*\*/i);
-      let groceryList = [];
-      if (groceryListMatch) {
-        groceryList = groceryListMatch[1]
-          .split(/[\n•\-–●☆★▪️•]+/)
-          .map(s => s.trim())
-          .filter(Boolean);
-      } else if (!recipeCard && fullReply.includes("- ")) {
-        groceryList = fullReply
-          .split("\n")
-          .filter(line => line.trim().startsWith("- "))
-          .map(line =>
-            line
-              .replace(/^[\-–●▪️•]+/, "")
-              .replace(/[^a-zA-Z\s()]/g, "")
-              .trim()
-          );
-      }
-
-      console.log("📦 Sending to frontend:", {
-        recipeCard,
-        reply: fullReply,
-      });
-      
-  
-      res.json({
-        reply: fullReply,
-        recipeCard,
-        groceryList,
-        haveIngredients: state.have,
-        missingIngredients: state.missing,
-        clearInstacart, // ✅ signal to hide Instacart card
-      });
-    } catch (error) {
-      console.error("💥 Error inside /api/dishmuse:", error);
-      res.status(500).json({ error: "Something went wrong" });
+    if (recipeCards.length > 0) {
+      stage = "recipe";
     }
-  });
-  
-  app.post("/api/vision-filter", async (req, res) => {
-    try {
-      const rawLabels = req.body.labels || [];
-      const prompt = `You are a helpful kitchen assistant.
-  
-  Given a list of words detected from a photo, identify only the **actual food ingredients** a person might cook with. Ignore anything that’s:
-  - a brand name
-  - a cuisine
-  - packaging or label text
-  - non-food (e.g. “plastic wrap” or “American”)
-  
-  Return only the food items, in a clean, comma-separated list.
-  
-  List:
-  ${JSON.stringify(rawLabels)}
-  `;
-  
-      const response = await model.invoke(prompt);
-      const cleaned = response.content
-        .split(",")
-        .map(s => s.trim())
-        .filter(Boolean);
-  
-      res.json({ filteredIngredients: cleaned });
-    } catch (err) {
-      console.error("Vision filter error:", err);
-      res.status(500).json({ error: "Vision label filtering failed" });
+
+    // Remove shopping list from reply if it was extracted
+    let cleanReply = fullReply;
+    if (shoppingMatch) {
+      cleanReply = fullReply.replace(shoppingMatch[0], '').trim();
     }
-  });
-  
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () =>
-    console.log(`✅ DishMuse backend running at http://localhost:${PORT}`)
-  );
-  
+
+    console.log("📦 Sending to frontend:", {
+      stage,
+      recipeCount: recipeCards.length,
+      groceryListCount: groceryList.length,
+    });
+
+    res.json({
+      stage,
+      reply: cleanReply,
+      recipeCard: recipeCards.length > 0 ? recipeCards[0] : null, // Send first recipe
+      recipeCards: recipeCards, // Send all recipes
+      groceryList,
+      haveIngredients: state.have,
+      missingIngredients: state.missing,
+    });
+  } catch (error) {
+    console.error("💥 Error inside /api/dishmuse:", error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
+app.post("/api/vision-filter", async (req, res) => {
+  try {
+    const rawLabels = req.body.labels || [];
+    const promptText = `You are a helpful kitchen assistant.
+
+Given a list of words detected from a photo, identify only the **actual food ingredients** a person might cook with. Ignore anything that's:
+- a brand name
+- a cuisine
+- packaging or label text
+- non-food (e.g. "plastic wrap" or "American")
+
+Return only the food items, in a clean, comma-separated list.
+
+List:
+${JSON.stringify(rawLabels)}
+`;
+
+    const response = await model.invoke(promptText);
+    const cleaned = response.content
+      .split(",")
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    res.json({ filteredIngredients: cleaned });
+  } catch (err) {
+    console.error("Vision filter error:", err);
+    res.status(500).json({ error: "Vision label filtering failed" });
+  }
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () =>
+  console.log(`✅ DishMuse backend running at http://localhost:${PORT}`)
+);

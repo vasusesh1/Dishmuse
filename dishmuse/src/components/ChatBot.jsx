@@ -1,80 +1,101 @@
 import React, { useState, useEffect, useRef } from "react";
 
 export default function ChatBot({
-  greeting = "Welcome to DishMuse! Your recipe assistant.",
+  greeting = "Hi there! 👋 I'm DishMuse, your friendly kitchen companion!\n\nTell me what you'd like to cook or what ingredients you have. You can also tap 📎 to upload a photo of your fridge/pantry.",
   typingIndicator = true,
   emojiReactions = true,
 }) {
-  // ---------- minimal chat state ----------
+  // ---------- basic chat state ----------
   const [messages, setMessages] = useState([{ text: greeting, isUser: false }]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
 
-  // minimal stages (optional, used only for UI toggles)
+  // UI toggles
   const [stage, setStage] = useState("chat");
 
-  // Structured shopping list from backend
+  // Shopping list (structured, view-only; NO buttons)
   const [shoppingList, setShoppingList] = useState([]);
   const [showShoppingCard, setShowShoppingCard] = useState(false);
 
-  // When backend sends a one-big-text shopping list
-  const [shoppingTextMsgIndex, setShoppingTextMsgIndex] = useState(null);
-
-  // Recipe scroll (if backend returns one)
+  // Recipe scroll (ONLY visual for recipes; never as a chat bubble)
   const [recipeCard, setRecipeCard] = useState(null);
   const [showRecipeScroll, setShowRecipeScroll] = useState(false);
+  const [liked, setLiked] = useState(false);
 
-  // moodboards kept out on purpose per your request
+  // Optional extras slot
+  const [moodboardImages, setMoodboardImages] = useState([]);
+
+  // Refs
+  const recognitionRef = useRef(null);
+  const fileInputRef = useRef(null);
   const listRef = useRef(null);
 
-  // session id for backend correlation
+  // Session id
   const [sessionId] = useState(() => {
-    const saved = localStorage.getItem("dishMuseSession");
-    if (saved) return saved;
     const id = `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-    localStorage.setItem("dishMuseSession", id);
     return id;
   });
 
-  // ---------- utilities ----------
+  const GOOGLE_API_KEY = process.env.REACT_APP_GOOGLE_VISION_API_KEY;
+
+  // ---------- effects ----------
   useEffect(() => {
-    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
   }, [messages, isTyping, showShoppingCard, showRecipeScroll]);
 
-  // remove brand/delivery lines that look salesy (kept, but narrower)
-  const sanitize = (text = "") => {
-    const killLine = /order|deliver(y|ies)|pickup|curbside|instacart|uber\s*eats|shipt|online\s+checkout/i;
-    return text
-      .split("\n")
-      .filter((ln) => !killLine.test(ln))
-      .join("\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
+  // STT
+  useEffect(() => {
+    if (!("webkitSpeechRecognition" in window)) return;
+    const SR = new window.webkitSpeechRecognition();
+    SR.lang = "en-US";
+    SR.interimResults = false;
+    SR.onresult = (e) => setInput(e.results[0][0].transcript);
+    recognitionRef.current = SR;
+  }, []);
+
+  // TTS
+  const speak = (text) => {
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "en-US";
+      window.speechSynthesis.speak(u);
+    } catch {}
   };
 
-  // very light heuristic for “this looks like a shopping list”
-  const looksLikeShoppingList = (txt = "") => {
-    const t = txt.trim();
-    if (!t) return false;
-    const lines = t.split("\n");
-    const bulletCount = lines.filter((l) => /^\s*(?:[-•]|\d+\.)\s+/.test(l)).length;
-    const hasCue = /shopping list|ingredients you’ll need|you will need/i.test(t);
-    return bulletCount >= 6 || hasCue;
-  };
+  // ---------- helpers ----------
+  const pushAssistant = (text) =>
+    setMessages((p) => [...p, { text, isUser: false }]);
 
-  const wantsShoppingList = (txt) =>
+  const pushUser = (text) =>
+    setMessages((p) => [...p, { text, isUser: true }]);
+
+  const wantsShoppingList = (txt = "") =>
     /shopping\s*list|grocery\s*list|what do i need|make.*list|give me.*list|list please|show.*list/i.test(
       txt.toLowerCase()
     ) || /^list$/i.test(txt.trim());
 
-  // helper: push assistant/user message
-  const pushAssistant = (text) =>
-    setMessages((p) => [...p, { text, isUser: false }]);
-  const pushUser = (text) => setMessages((p) => [...p, { text, isUser: true }]);
+  const normalizeList = (list) =>
+    (list || []).map((g) =>
+      typeof g === "string"
+        ? { name: String(g).trim(), qty: "", unit: "", optional: false }
+        : {
+            name: (g.name ?? g.item ?? "").toString().trim(),
+            qty:
+              g.qty !== undefined && g.qty !== null && `${g.qty}` !== ""
+                ? `${g.qty}`
+                : "",
+            unit: g.unit || "",
+            optional: !!g.optional,
+          }
+    );
 
-  // ---------- downloads ----------
+  // ---------- downloads (recipe only) ----------
   const downloadTextFile = (filename, textOrLines) => {
-    const content = Array.isArray(textOrLines) ? textOrLines.join("\n") : String(textOrLines);
+    const content = Array.isArray(textOrLines)
+      ? textOrLines.join("\n")
+      : String(textOrLines);
     const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -82,25 +103,6 @@ export default function ChatBot({
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-  };
-
-  const downloadShoppingList = () => {
-    if (!shoppingList.length) return;
-    const lines = [
-      "DishMuse Shopping List",
-      "======================",
-      ...shoppingList.map(({ name, qty, unit, optional }) =>
-        `${optional ? "[optional] " : ""}${name}${qty ? ` — ${qty}${unit ? " " + unit : ""}` : ""}`
-      ),
-      "",
-    ];
-    downloadTextFile("DishMuse_Shopping_List.txt", lines);
-  };
-
-  const downloadShoppingTextFromMsg = (idx) => {
-    const msg = messages[idx]?.text || "";
-    if (!msg) return;
-    downloadTextFile("DishMuse_Shopping_List.txt", msg);
   };
 
   const downloadRecipe = () => {
@@ -116,7 +118,47 @@ export default function ChatBot({
       ...((recipeCard.steps || []).map(String)),
       "",
     ];
-    downloadTextFile(`${(recipeCard.name || "Recipe").replace(/\s+/g, "_")}.txt`, lines);
+    downloadTextFile(
+      `${(recipeCard.name || "Recipe").replace(/\s+/g, "_")}.txt`,
+      lines
+    );
+  };
+
+  // ---------- recipe fetch (scroll only) ----------
+  const fetchRecipeNow = async () => {
+    if (typingIndicator) setIsTyping(true);
+    try {
+      const res = await fetch("http://localhost:5000/api/dishmuse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: "recipe",
+          sessionId,
+          noOnlineShopping: true,
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        pushAssistant("Server error: " + (data.error || "unknown"));
+        return;
+      }
+
+      if (data.recipeCard) {
+        setRecipeCard(data.recipeCard);
+        setShowRecipeScroll(true);
+        setStage("recipe");
+      } else if (data.reply) {
+        // Only speak text if no recipe card was provided
+        pushAssistant(data.reply);
+        speak(data.reply);
+      }
+    } catch (e) {
+      console.error(e);
+      pushAssistant("Oops! Something went wrong.");
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   // ---------- send ----------
@@ -124,17 +166,18 @@ export default function ChatBot({
     const userText = input.trim();
     if (!userText) return;
 
-    // Add user bubble
+    // user bubble
     pushUser(userText);
     setInput("");
 
-    // clear transient panels
+    // clear transient UI
     setShowRecipeScroll(false);
     setRecipeCard(null);
+    setMoodboardImages([]);
+    setLiked(false);
+    setStage("chat");
     setShowShoppingCard(false);
     setShoppingList([]);
-    setStage("chat");
-    setShoppingTextMsgIndex(null);
 
     if (typingIndicator) setIsTyping(true);
 
@@ -142,12 +185,11 @@ export default function ChatBot({
       const res = await fetch("http://localhost:5000/api/dishmuse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // IMPORTANT: keep payload minimal; do NOT send inventory/extra flags
         body: JSON.stringify({
           input: userText,
           sessionId,
           noOnlineShopping: true,
-          // Only nudge list mode if the USER asked for it explicitly
+          // Only hint list mode if user explicitly asked
           forceGroceryStage: wantsShoppingList(userText),
           shoppingListOnly: wantsShoppingList(userText),
         }),
@@ -160,45 +202,59 @@ export default function ChatBot({
         return;
       }
 
-      // 1) Structured shopping list
-      if (Array.isArray(data.groceryList) && data.groceryList.length > 0) {
-        const normalized = (data.groceryList || []).map((g) =>
-          typeof g === "string"
-            ? { name: String(g).trim(), qty: "", unit: "", optional: false }
-            : {
-                name: (g.name ?? g.item ?? "").toString().trim(),
-                qty:
-                  g.qty !== undefined && g.qty !== null && `${g.qty}` !== ""
-                    ? `${g.qty}`
-                    : "",
-                unit: g.unit || "",
-                optional: !!g.optional,
-              }
-        );
-        setShoppingList(normalized);
-        setShowShoppingCard(true);
-        setStage("shopping_list");
-      }
-
-      // 2) Recipe scroll (optional)
-      if (data.recipeCard) {
+      // Handle recipe stage - show scroll ONLY, split plating message PROPERLY
+      if (data.stage === "recipe" && data.recipeCard) {
+        let mainReply = "";
+        let platingReply = "";
+        
+        if (data.reply) {
+          // Split on plating-related phrases
+          const split = data.reply.split(/(Want to serve it café-style|Would you like.*?plating|café-style or thali-style)/i);
+          
+          mainReply = split[0].trim();
+          
+          // Rejoin plating parts
+          if (split.length > 1) {
+            platingReply = split.slice(1).join('').trim();
+          }
+          
+          // Show main reply if it doesn't contain recipe content
+          if (mainReply && 
+              !mainReply.includes("**Ingredients:**") && 
+              !mainReply.includes("**Steps:**") &&
+              !mainReply.includes("**FUSION PAV") &&
+              !mainReply.includes("**CREAMY AAMRAS")) {
+            pushAssistant(mainReply);
+            speak(mainReply);
+          }
+        }
+        
+        // Show recipe scroll
         setRecipeCard(data.recipeCard);
         setShowRecipeScroll(true);
         setStage("recipe");
+        
+        // Show plating message as separate bubble after delay
+        if (platingReply) {
+          setTimeout(() => {
+            pushAssistant(platingReply);
+          }, 800);
+        }
+      } else if (data.reply) {
+        // For non-recipe stages, show full conversational reply
+        pushAssistant(data.reply);
+        speak(data.reply);
       }
 
-      // 3) Normal assistant reply
-      if (data.reply) {
-        const safeReply = sanitize(data.reply);
-        const isListText = looksLikeShoppingList(safeReply) && wantsShoppingList(userText);
-        const idxBefore = messages.length + 1; // +1 because we already pushed the user message
+      // Only show grocery list if explicitly in grocery stage AND has valid items
+      if (data.stage === "grocery" && Array.isArray(data.groceryList) && data.groceryList.length > 0) {
+        const normalized = normalizeList(data.groceryList);
+        setShoppingList(normalized);
+        setShowShoppingCard(true);
+        setStage("shopping_list");
 
-        pushAssistant(safeReply);
-
-        // If the reply itself looks like a shopping list, offer a download button right under it
-        if (isListText) {
-          setShoppingTextMsgIndex(idxBefore); // index of the assistant message we just pushed
-        }
+        // Immediately fetch recipe scroll AFTER showing the list
+        fetchRecipeNow();
       }
     } catch (err) {
       console.error(err);
@@ -208,50 +264,175 @@ export default function ChatBot({
     }
   };
 
+  // ---------- speech / attach ----------
+  const handleMicClick = () => recognitionRef.current?.start();
+  const handleAttachClick = () => fileInputRef.current?.click();
+
+  // ---------- Vision ----------
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result.split(",")[1];
+      const body = {
+        requests: [
+          {
+            image: { content: base64 },
+            features: [
+              { type: "LABEL_DETECTION", maxResults: 10 },
+              { type: "TEXT_DETECTION" },
+              { type: "WEB_DETECTION" },
+            ],
+          },
+        ],
+      };
+
+      pushUser("Extract ingredients from the image please");
+      setShowRecipeScroll(false);
+      setRecipeCard(null);
+      setShowShoppingCard(false);
+      setShoppingList([]);
+      if (typingIndicator) setIsTyping(true);
+
+      try {
+        const vis = await fetch(
+          `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }
+        );
+        const data = await vis.json();
+        const labels = data.responses?.[0]?.labelAnnotations || [];
+        const texts =
+          data.responses?.[0]?.textAnnotations?.[0]?.description || "";
+        const web = data.responses?.[0]?.webDetection?.webEntities || [];
+        const raw = Array.from(
+          new Set([
+            ...labels.map((l) => l.description?.toLowerCase()).filter(Boolean),
+            ...texts.toLowerCase().split(/\n|,/).map((s) => s.trim()),
+            ...web.map((e) => e.description?.toLowerCase()).filter(Boolean),
+          ])
+        );
+
+        const replyRes = await fetch("http://localhost:5000/api/dishmuse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            imageIngredients: raw,
+            noOnlineShopping: true,
+          }),
+        });
+        const replyData = await replyRes.json();
+
+        if (replyRes.ok) {
+          // Handle recipe stage separately with plating split
+          if (replyData.stage === "recipe" && replyData.recipeCard) {
+            if (replyData.reply) {
+              const platingSplit = replyData.reply.split(/(?=Want to serve|Would you like.*plating|café-style|thali-style)/i);
+              
+              if (platingSplit[0] && platingSplit[0].trim() && 
+                  !platingSplit[0].includes("**Ingredients:**") && 
+                  !platingSplit[0].includes("**Steps:**")) {
+                pushAssistant(platingSplit[0].trim());
+                speak(platingSplit[0].trim());
+              }
+              
+              setRecipeCard(replyData.recipeCard);
+              setShowRecipeScroll(true);
+              setStage("recipe");
+              
+              if (platingSplit[1]) {
+                setTimeout(() => {
+                  pushAssistant(platingSplit[1].trim());
+                }, 500);
+              }
+            } else {
+              setRecipeCard(replyData.recipeCard);
+              setShowRecipeScroll(true);
+              setStage("recipe");
+            }
+          } else if (replyData.reply) {
+            pushAssistant(replyData.reply);
+            speak(replyData.reply);
+          }
+
+          if (replyData.stage === "grocery" && replyData.groceryList?.length) {
+            const normalized = normalizeList(replyData.groceryList);
+            setShoppingList(normalized);
+            setShowShoppingCard(true);
+            setStage("shopping_list");
+            // Auto move to recipe after list
+            fetchRecipeNow();
+          }
+        } else {
+          pushAssistant("Image upload error: " + replyData.error);
+        }
+      } catch (err) {
+        console.error(err);
+        pushAssistant("Oops! Vision API failed.");
+      } finally {
+        setIsTyping(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ---------- recipe actions ----------
+  const likeRecipe = () => {
+    setLiked(true);
+    pushAssistant("Saved as a favorite. Happy cooking! 💛");
+  };
+
   // ---------- UI ----------
   return (
     <div className="flex flex-col h-full w-full">
       {/* Conversation */}
-      <div ref={listRef} className="flex-1 overflow-y-auto overscroll-contain space-y-3 pr-1 -mr-1 scroll-smooth">
-        {messages.map((m, i) => {
-          const showDownloadForThisTextList = i === shoppingTextMsgIndex;
-          return (
-            <div key={i} className={`flex ${m.isUser ? "justify-end" : "justify-start"}`}>
-              <div
-                className={`px-4 py-2 rounded-2xl max-w-[75%] whitespace-pre-wrap ${
-                  m.isUser ? "msg-user text-right" : "msg-assistant text-left"
-                }`}
-              >
-                {m.text}
-                {emojiReactions && !m.isUser && <div className="mt-1 text-sm">🤩 🍽️</div>}
-
-                {showDownloadForThisTextList && (
-                  <div className="mt-2">
-                    <button
-                      onClick={() => downloadShoppingTextFromMsg(i)}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full"
-                    >
-                      ⬇️ Download List
-                    </button>
-                  </div>
-                )}
-              </div>
+      <div
+        ref={listRef}
+        className="flex-1 overflow-y-auto overscroll-contain space-y-3 pr-1 -mr-1 scroll-smooth"
+      >
+        {messages.map((m, i) => (
+          <div
+            key={i}
+            className={`flex ${m.isUser ? "justify-end" : "justify-start"}`}
+          >
+            <div
+              className={`px-4 py-2 rounded-2xl max-w-[75%] whitespace-pre-wrap ${
+                m.isUser ? "msg-user text-right" : "msg-assistant text-left"
+              }`}
+            >
+              {m.text}
+              {emojiReactions && !m.isUser && (
+                <div className="mt-1 text-sm">🤩 🍽️</div>
+              )}
             </div>
-          );
-        })}
+          </div>
+        ))}
 
         {isTyping && (
           <div className="flex justify-start">
             <div className="px-4 py-2 rounded-2xl msg-assistant text-sm">
-              <span className="dm-typing"><span>•</span><span>•</span><span>•</span></span>
+              <span className="dm-typing">
+                <span>•</span>
+                <span>•</span>
+                <span>•</span>
+              </span>
             </div>
           </div>
         )}
 
-        {/* Structured Shopping List Card (always shows Download when present) */}
+        {/* Shopping List Card (VIEW-ONLY — NO BUTTONS) */}
         {showShoppingCard && shoppingList.length > 0 && (
           <div className="bg-white mt-2 p-4 rounded-xl shadow-lg border border-green-300">
-            <h3 className="text-md font-semibold text-green-800 mb-2">🛒 Shopping List</h3>
+            <h3 className="text-md font-semibold text-green-800 mb-2">
+              🛒 Shopping List
+            </h3>
             <ul className="list-disc list-inside text-sm text-gray-800">
               {shoppingList.map(({ name, qty, unit, optional }, idx) => (
                 <li key={idx}>
@@ -261,37 +442,53 @@ export default function ChatBot({
                 </li>
               ))}
             </ul>
-
-            <div className="mt-3">
-              <button
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full"
-                onClick={downloadShoppingList}
-              >
-                ⬇️ Download List
-              </button>
-            </div>
           </div>
         )}
 
-        {/* Recipe Scroll (optional) */}
+        {/* Recipe Scroll (ONLY format for recipes) */}
         {showRecipeScroll && recipeCard && (
           <div className="dm-scroll">
             <div className="dm-scroll-inner">
-              <h2 className="text-xl font-extrabold text-amber-800 mb-2">{recipeCard.name}</h2>
-              {!!recipeCard.serves && <p className="text-sm text-amber-900/80 mb-3">{recipeCard.serves}</p>}
-              <h3 className="font-semibold text-amber-900 mb-1">Ingredients:</h3>
-              <ul className="list-disc list-inside mb-3 text-[15px] leading-relaxed text-amber-900">
-                {(recipeCard.ingredients || []).map((x, idx) => <li key={idx}>{x}</li>)}
+              <h2 className="text-xl font-extrabold mb-2" style={{ color: '#5b3b1e' }}>
+                {recipeCard.name}
+              </h2>
+              {!!recipeCard.serves && (
+                <p className="text-sm mb-3" style={{ color: '#5b3b1e', opacity: 0.8 }}>
+                  {recipeCard.serves}
+                </p>
+              )}
+
+              <h3 className="font-semibold mb-1" style={{ color: '#5b3b1e' }}>Ingredients:</h3>
+              <ul className="list-disc list-inside mb-3 text-[15px] leading-relaxed" style={{ color: '#5b3b1e' }}>
+                {(recipeCard.ingredients || []).map((x, idx) => (
+                  <li key={idx}>{x}</li>
+                ))}
               </ul>
-              <h3 className="font-semibold text-amber-900 mb-1">Steps:</h3>
-              <ol className="list-decimal list-inside text-[15px] leading-relaxed text-amber-900">
-                {(recipeCard.steps || []).map((s, idx) => <li key={idx} className="mb-1">{s}</li>)}
+
+              <h3 className="font-semibold mb-1" style={{ color: '#5b3b1e' }}>Steps:</h3>
+              <ol className="list-decimal list-inside text-[15px] leading-relaxed" style={{ color: '#5b3b1e' }}>
+                {(recipeCard.steps || []).map((s, idx) => (
+                  <li key={idx} className="mb-1">
+                    {s}
+                  </li>
+                ))}
               </ol>
             </div>
 
-            <div className="mt-3">
-              <button onClick={downloadRecipe} className="px-4 py-2 rounded-full bg-teal-600 hover:bg-teal-700 text-white">
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={downloadRecipe}
+                className="px-4 py-2 rounded-full bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium"
+              >
                 ⬇️ Download Recipe
+              </button>
+              <button
+                onClick={likeRecipe}
+                className={`px-4 py-2 rounded-full text-white text-sm font-medium ${
+                  liked ? "bg-amber-700" : "bg-amber-600 hover:bg-amber-700"
+                }`}
+              >
+                {liked ? "★ Liked" : "☆ Like"}
               </button>
             </div>
           </div>
@@ -302,13 +499,54 @@ export default function ChatBot({
       <div className="sticky bottom-0 pt-3 bg-gradient-to-t from-[rgba(255,243,222,0.96)] to-transparent backdrop-blur-[2px]">
         <div className="flex items-center gap-2">
           <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleImageUpload}
+          />
+          <button
+            onClick={handleAttachClick}
+            className="dm-attach-btn rounded-full p-2"
+            title="Attach photo"
+          >
+            📎
+          </button>
+
+          <input
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              // clear panels on new typing
+              if (showShoppingCard) {
+                setShowShoppingCard(false);
+                setShoppingList([]);
+              }
+              if (showRecipeScroll) {
+                setShowRecipeScroll(false);
+                setRecipeCard(null);
+              }
+              if (moodboardImages.length) setMoodboardImages([]);
+            }}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             className="flex-1 dm-input focus:outline-none"
-            placeholder="Ask me anything…"
+            placeholder="Tell me what you'd like to cook…"
           />
-          <button onClick={handleSend} className="dm-send-btn px-4 py-2 rounded-full" title="Send">➤</button>
+
+          <button
+            onClick={handleMicClick}
+            className="dm-mic-btn rounded-full p-2 text-xl"
+            title="Speak"
+          >
+            🎤
+          </button>
+          <button
+            onClick={handleSend}
+            className="dm-send-btn px-4 py-2 rounded-full"
+            title="Send"
+          >
+            ➤
+          </button>
         </div>
         <div className="h-[env(safe-area-inset-bottom,0px)]" />
       </div>
