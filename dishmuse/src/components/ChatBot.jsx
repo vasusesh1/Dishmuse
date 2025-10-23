@@ -129,9 +129,8 @@ export default function ChatBot({
       lines
     );
 
-    // Just show a brief success message - DON'T dismiss the scroll
-    // User might want to navigate to other recipes and download those too
-    pushAssistant(`✅ "${recipeCard.name}" downloaded! ${allRecipes.length > 1 ? 'Feel free to check out the other recipes or click Dismiss when done.' : 'Click Dismiss when you\'re ready to continue.'}`);
+    // Just show a brief success message - recipe scroll stays visible
+    pushAssistant(`✅ "${recipeCard.name}" downloaded!`);
   };
 
   // ---------- recipe fetch (scroll only) ----------

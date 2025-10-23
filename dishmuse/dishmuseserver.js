@@ -11,6 +11,7 @@ import { ChatMessageHistory } from "langchain/stores/message/in_memory";
 import { RunnableWithMessageHistory } from "@langchain/core/runnables";
 import pkg from "cors";
 const cors = pkg.default || pkg;
+import { generatePlatingImages } from "./firefly-integration.js";
 
 dotenv.config();
 
@@ -126,9 +127,23 @@ Plating & Presentation:
 AFTER recipe is complete, in a SEPARATE message:
 - If user mentioned events, guests, or hosting, offer plating help immediately
 - Otherwise, gently ask: "Want to serve it café-style or thali-style? I can show you some plating ideas!"
+- **CRITICAL: Structure plating suggestions clearly with section headers for EACH dish/element:**
+  - Use format: **For the [Dish Name]:** followed by 3-5 specific visual suggestions
+  - Use format: **Table Setting:** for overall presentation
+  - Use format: **[Element] Service:** for drinks, sides, desserts
 - Offer elegant plating suggestions matching context (soft light for brunch, candlelit for dinner, bright pastels for kids, rustic street-style for casual)
-- Can suggest: color palettes, table runners, lighting, serveware
-
+- Be VISUAL and DESCRIPTIVE: mention colors, textures, arrangements, garnishes, serveware, lighting
+- Example structure:
+  **For the Main Dish:**
+  - Describe plate choice and arrangement
+  - Describe garnish and color contrast
+  - Describe sauce drizzle or presentation technique
+  
+  **Table Setting:**
+  - Describe table runner/cloth and color palette
+  - Describe serveware style
+  - Describe ambient elements (candles, flowers, etc.)
+  
 Safety & Guardrails:
 DishMuse MUST NEVER:
 - Provide self-harm, violence, poison, or illegal content
@@ -318,7 +333,7 @@ app.post("/api/dishmuse", async (req, res) => {
       
       const ingredients = rawIngredients
         .split(/\n/)
-        .map(s => s.replace(/^[-•\d\.\s🥔🥕🫑🥬🍅🧅]+/, '').trim())
+        .map(s => s.replace(/^[-•🥔🥕🫑🥬🍅🧅\s]+/, '').trim())
         .filter(line => line && !line.startsWith('**') && line.length > 2);
       
       const steps = rawSteps
@@ -394,6 +409,45 @@ ${JSON.stringify(rawLabels)}
   } catch (err) {
     console.error("Vision filter error:", err);
     res.status(500).json({ error: "Vision label filtering failed" });
+  }
+});
+
+// NEW: Generate plating visualization images
+app.post("/api/generate-plating-images", async (req, res) => {
+  try {
+    const { platingText, dishName, recipeName } = req.body;
+    
+    console.log("🎨 Generating plating images for:", dishName || recipeName);
+    
+    // Generate 3-4 images using Adobe Firefly
+    const images = await generatePlatingImages(
+      platingText, 
+      dishName || recipeName || "dish"
+    );
+    
+    if (images && images.length > 0) {
+      res.json({ 
+        success: true,
+        images: images.map(img => ({
+          url: img.url,
+          section: img.section,
+          description: img.description
+        }))
+      });
+    } else {
+      res.json({ 
+        success: false, 
+        message: "Could not generate images at this time",
+        images: [] 
+      });
+    }
+  } catch (error) {
+    console.error("💥 Plating image generation error:", error);
+    res.status(500).json({ 
+      success: false,
+      error: "Image generation failed",
+      images: []
+    });
   }
 });
 
