@@ -33,6 +33,7 @@ export default function ChatBot({
   const recognitionRef = useRef(null);
   const fileInputRef = useRef(null);
   const listRef = useRef(null);
+  const lastRecipeNameRef = useRef(null); // Track last recipe for plating images
 
   // Session id
   const [sessionId] = useState(() => {
@@ -133,6 +134,46 @@ export default function ChatBot({
     pushAssistant(`✅ "${recipeCard.name}" downloaded!`);
   };
 
+  // ---------- NEW: Request plating images from backend ----------
+  const requestPlatingImages = async (platingText, dishName) => {
+    try {
+      console.log("🎨 Requesting plating images...");
+      
+      const res = await fetch("http://localhost:5000/api/generate-plating-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platingText: platingText,
+          dishName: dishName,
+          recipeName: recipeCard?.name || dishName
+        }),
+      });
+
+      const data = await res.json();
+      
+      if (data.success && data.images && data.images.length > 0) {
+        console.log(`✅ Received ${data.images.length} plating images`);
+        setMoodboardImages(data.images);
+        return true;
+      } else {
+        console.log("⚠️ No images generated");
+        return false;
+      }
+    } catch (error) {
+      console.error("❌ Error requesting plating images:", error);
+      return false;
+    }
+  };
+
+  // Helper to detect plating requests
+  const isPlatingRequest = (text) => {
+    const lower = text.toLowerCase();
+    return (
+      /plating|presentation|decor|table.*setting|how.*serve|visual/i.test(lower) ||
+      /^(yes|sure|please|ok|yeah|yep)$/i.test(lower.trim())
+    );
+  };
+
   // ---------- recipe fetch (scroll only) ----------
   const fetchRecipeNow = async () => {
     if (typingIndicator) setIsTyping(true);
@@ -226,6 +267,8 @@ export default function ChatBot({
           setRecipeCard(recipes[0]);
           setShowRecipeScroll(true);
           setStage("recipe");
+          // Store first recipe name for plating images later
+          lastRecipeNameRef.current = recipes[0]?.name || "your dish";
         }
         
         // Handle reply text - filter out "Saved as favorite" and split plating
@@ -265,6 +308,33 @@ export default function ChatBot({
         // For non-recipe stages, show full conversational reply
         pushAssistant(data.reply);
         speak(data.reply);
+        
+        // Check if this is a plating response AND user requested it
+        const looksLikePlatingText = data.reply.includes("**") && data.reply.match(/\*\*.*?:\*\*/);
+        const userWantsPlating = isPlatingRequest(userText);
+        
+        if (looksLikePlatingText && userWantsPlating) {
+          // User confirmed they want plating ideas - now generate images
+          console.log("🎨 User requested plating, generating images...");
+          
+          setTimeout(() => {
+            pushAssistant("🎨 Creating visual inspiration for you...");
+          }, 1000);
+          
+          setTimeout(async () => {
+            const dishName = lastRecipeNameRef.current || "your dish";
+            console.log("📸 Requesting images for:", dishName);
+            
+            const success = await requestPlatingImages(data.reply, dishName);
+            
+            if (!success) {
+              // Fallback if image generation fails
+              setTimeout(() => {
+                pushAssistant("Check out the plating suggestions above! 🍽️");
+              }, 500);
+            }
+          }, 2000);
+        }
       }
 
       // Only show grocery list if explicitly in grocery stage AND has valid items
@@ -289,7 +359,7 @@ export default function ChatBot({
   const handleMicClick = () => recognitionRef.current?.start();
   const handleAttachClick = () => fileInputRef.current?.click();
 
-  // ---------- Vision ----------
+  // ---------- Vision ---------- FIXED VERSION
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -339,12 +409,13 @@ export default function ChatBot({
           ])
         );
 
+        // 🔴 CRITICAL FIX: Changed "imageIngredients" to "imageLabels"
         const replyRes = await fetch("http://localhost:5000/api/dishmuse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             sessionId,
-            imageIngredients: raw,
+            imageLabels: raw,  // ✅ FIXED: Was "imageIngredients", now matches backend
             noOnlineShopping: true,
           }),
         });
@@ -441,7 +512,7 @@ export default function ChatBot({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId,
-          action: "download", // Reuse the download action to get plating prompt
+          action: "download", // Triggers plating question
         }),
       });
 
@@ -451,6 +522,8 @@ export default function ChatBot({
       if (data.reply && data.reply.trim()) {
         pushAssistant(data.reply);
         speak(data.reply);
+        
+        // DON'T auto-generate images here - wait for user to say "yes"
       }
     } catch (error) {
       console.error("Error:", error);
@@ -612,6 +685,45 @@ export default function ChatBot({
               >
                 ✕ Dismiss
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* NEW: Plating Images Moodboard */}
+        {moodboardImages.length > 0 && (
+          <div className="plating-moodboard">
+            <div className="plating-moodboard-header">
+              <h3>✨ Visual Plating Inspiration</h3>
+              <button 
+                onClick={() => setMoodboardImages([])}
+                className="dismiss-moodboard-btn"
+                title="Dismiss images"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="plating-images-grid">
+              {moodboardImages.map((img, idx) => (
+                <div key={idx} className="plating-image-card">
+                  {img.section && (
+                    <div className="image-section-label">{img.section}</div>
+                  )}
+                  <img 
+                    src={img.url} 
+                    alt={img.description || `Plating idea ${idx + 1}`}
+                    className="plating-image"
+                    loading="lazy"
+                    onError={(e) => {
+                      console.error("Image failed to load:", img.url);
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                  {img.description && (
+                    <p className="image-description">{img.description}</p>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}

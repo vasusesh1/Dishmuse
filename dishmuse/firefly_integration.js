@@ -6,13 +6,23 @@ import fetch from 'node-fetch';
 /**
  * Adobe Firefly API Configuration
  * Get your credentials from: https://developer.adobe.com/firefly-services/
+ * NOTE: We read from process.env inside functions, not at module level,
+ * to ensure dotenv.config() has run first
  */
-const FIREFLY_CLIENT_ID = process.env.FIREFLY_CLIENT_ID;
-const FIREFLY_CLIENT_SECRET = process.env.FIREFLY_CLIENT_SECRET;
 
 // Cache the access token
 let cachedAccessToken = null;
 let tokenExpiresAt = 0;
+
+/**
+ * Get credentials from environment (called at runtime, not import time)
+ */
+function getCredentials() {
+  return {
+    clientId: process.env.FIREFLY_CLIENT_ID,
+    clientSecret: process.env.FIREFLY_CLIENT_SECRET
+  };
+}
 
 /**
  * Get or refresh Adobe access token
@@ -21,6 +31,12 @@ async function getAccessToken() {
   // Return cached token if still valid
   if (cachedAccessToken && Date.now() < tokenExpiresAt) {
     return cachedAccessToken;
+  }
+
+  const { clientId, clientSecret } = getCredentials();
+
+  if (!clientId || !clientSecret) {
+    throw new Error("Firefly credentials not found in environment variables");
   }
 
   try {
@@ -33,8 +49,8 @@ async function getAccessToken() {
       },
       body: new URLSearchParams({
         grant_type: 'client_credentials',
-        client_id: FIREFLY_CLIENT_ID,
-        client_secret: FIREFLY_CLIENT_SECRET,
+        client_id: clientId,
+        client_secret: clientSecret,
         scope: 'openid,AdobeID,firefly_api,ff_apis'
       })
     });
@@ -66,7 +82,9 @@ async function getAccessToken() {
  * @returns {Promise<Array>} Array of image URLs
  */
 export async function generatePlatingImages(platingText, dishName = "") {
-  if (!FIREFLY_CLIENT_ID || !FIREFLY_CLIENT_SECRET) {
+  const { clientId, clientSecret } = getCredentials();
+  
+  if (!clientId || !clientSecret) {
     console.error("⚠️ Adobe Firefly credentials not configured");
     console.error("Please set FIREFLY_CLIENT_ID and FIREFLY_CLIENT_SECRET in .env");
     return [];
@@ -81,7 +99,7 @@ export async function generatePlatingImages(platingText, dishName = "") {
     
     // Generate 3-4 images (one per major plating idea)
     const imagePromises = ideas.slice(0, 4).map((idea, index) => 
-      generateSingleImage(idea, dishName, index, accessToken)
+      generateSingleImage(idea, dishName, index, accessToken, clientId)
     );
 
     const results = await Promise.all(imagePromises);
@@ -140,7 +158,7 @@ function parsePlatingIdeas(platingText) {
 /**
  * Generate a single image using Adobe Firefly API
  */
-async function generateSingleImage(idea, dishName, index, accessToken) {
+async function generateSingleImage(idea, dishName, index, accessToken, clientId) {
   try {
     // Construct a detailed prompt for Firefly
     const prompt = buildFireflyPrompt(idea, dishName);
@@ -153,7 +171,7 @@ async function generateSingleImage(idea, dishName, index, accessToken) {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'x-api-key': FIREFLY_CLIENT_ID,
+        'x-api-key': clientId,
         'Authorization': `Bearer ${accessToken}`
       },
       body: JSON.stringify({
@@ -220,7 +238,9 @@ function buildFireflyPrompt(idea, dishName) {
  * Use this if the v3 endpoint doesn't work
  */
 export async function generatePlatingImagesSimple(platingText, dishName = "") {
-  if (!FIREFLY_CLIENT_ID || !FIREFLY_CLIENT_SECRET) {
+  const { clientId, clientSecret } = getCredentials();
+  
+  if (!clientId || !clientSecret) {
     console.error("⚠️ Adobe Firefly credentials not configured");
     return [];
   }
@@ -243,7 +263,7 @@ export async function generatePlatingImagesSimple(platingText, dishName = "") {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-api-key': FIREFLY_CLIENT_ID,
+            'x-api-key': clientId,
             'Authorization': `Bearer ${accessToken}`
           },
           body: JSON.stringify({

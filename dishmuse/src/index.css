@@ -452,3 +452,106 @@ html, body, #root { font-family: 'Poppins', system-ui, -apple-system, Segoe UI, 
   border-color: #D0D0D0;
   color: #999;
 }
+
+/* Plating moodboard */
+.plating-moodboard {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: linear-gradient(180deg, #fff8ec 0%, #fff3de 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(242, 187, 113, 0.45);
+  box-shadow: 0 8px 18px rgba(0,0,0,.12);
+}
+
+.plating-moodboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.plating-moodboard-header h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #6B3E1E;
+  margin: 0;
+}
+
+.dismiss-moodboard-btn {
+  background: #E0E0E0;
+  color: #5C3D2E;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.3s ease;
+}
+
+.dismiss-moodboard-btn:hover {
+  background: #D0D0D0;
+  transform: scale(1.1);
+}
+
+.plating-images-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.plating-image-card {
+  position: relative;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.plating-image-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0,0,0,.15);
+}
+
+.image-section-label {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(242, 155, 47, 0.9);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 10;
+}
+
+.plating-image {
+  width: 100%;
+  height: 250px;
+  object-fit: cover;
+  display: block;
+}
+
+.image-description {
+  padding: 12px;
+  font-size: 13px;
+  color: #6B3E1E;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .plating-images-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+  
+  .plating-image {
+    height: 200px;
+  }
+}
